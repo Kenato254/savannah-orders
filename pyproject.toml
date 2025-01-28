@@ -1,0 +1,20 @@
+[project]
+name = "savannah-orders"
+version = "0.1.0"
+description = "Savannah Orders is a backend service designed to manage customer and order data efficiently. The system allows users to create and retrieve customer and order records through a REST API built with FastAPI."
+authors = [{ name = "kenato254", email = "kenedygitonga@gmail.com" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.13,<4.0"
+dependencies = [
+    "fastapi (>=0.115.7,<0.116.0)",
+    "pyjwt (>=2.10.1,<3.0.0)",
+    "sqlalchemy (>=2.0.37,<3.0.0)",
+    "uvicorn (>=0.34.0,<0.35.0)",
+    "loguru (>=0.7.3,<0.8.0)",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
