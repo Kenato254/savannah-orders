@@ -3,7 +3,7 @@ import sys
 
 
 def main():
-    sys.exit(pytest.main(["-v", "-s"]))
+    sys.exit(pytest.main(["-v", "--cov-branch", "--cov-report=xml"]))
 
 
 if __name__ == "__main__":
