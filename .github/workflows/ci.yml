@@ -27,7 +27,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        poetry run pytest
+        poetry run test
 
     - name: Check code style with black
       run: |
