@@ -32,11 +32,14 @@ class Configuration:
         instance does not exist yet.
 
         Args:
-            config_file (str, optional): Config file name. Defaults to "config.ini".
+            config_file (str, optional): Config file name. Defaults to
+                                                            "config.ini".
         """
         if not hasattr(self, "initialized"):
             config = ConfigParser()
-            config_path = Path(__file__).resolve().parent.parent.parent / config_file
+            config_path = (
+                Path(__file__).resolve().parent.parent.parent / config_file
+            )
 
             try:
                 config.read(config_path)
@@ -60,7 +63,9 @@ class Configuration:
                 # Jwt Token
                 self.ALGORITHM = config.get("TOKEN", "ALGORITHM")
                 self.SECRET_KEY = config.get("TOKEN", "SECRET_KEY")
-                self.EXPIRATION_TIME = config.getint("TOKEN", "EXPIRATION_TIME")
+                self.EXPIRATION_TIME = config.getint(
+                    "TOKEN", "EXPIRATION_TIME"
+                )
                 self.REFRESH_EXPIRATION_TIME = config.getint(
                     "TOKEN", "REFRESH_EXPIRATION_TIME"
                 )
@@ -68,7 +73,9 @@ class Configuration:
                 self.initialized = True
 
             except Exception as err:
-                logger.error(f"Reading `{config_file}` failed with error: {err}")
+                logger.error(
+                    f"Reading `{config_file}` failed with error: {err}"
+                )
 
     def set_env_variables(self):
         """Sets the configuration attributes as environment variables."""
@@ -88,4 +95,6 @@ class Configuration:
             os.environ[attr] = str(getattr(self, attr))
 
 
-config = Configuration("resources/development.ini")  # Configuration class instance
+config = Configuration(
+    "resources/development.ini"
+)  # Configuration class instance

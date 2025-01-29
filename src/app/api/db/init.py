@@ -36,7 +36,8 @@ class DatabaseService:
         except SQLAlchemyError as e:
             # TODO: log this error or handle it more appropriately
             raise HTTPException(
-                status_code=500, detail=f"Failed to initialize database connection. {e}"
+                status_code=500,
+                detail=f"Failed to initialize database connection. {e}",
             )
 
     def get_session(self):
@@ -52,7 +53,8 @@ class DatabaseService:
             Base.metadata.create_all(bind=self.engine)
         except SQLAlchemyError as e:
             raise HTTPException(
-                status_code=500, detail=f"Failed to initialize database schema. {e}"
+                status_code=500,
+                detail=f"Failed to initialize database schema. {e}",
             )
 
 

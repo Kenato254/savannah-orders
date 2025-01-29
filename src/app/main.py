@@ -1,3 +1,4 @@
+import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,7 +24,9 @@ async def lifespan(app: FastAPI, service: DatabaseService = db_service):
         logger.info("Application is shutting down...")
 
 
-app = FastAPI(debug=config.DEBUG, root_path=config.ROOT_PATH, lifespan=lifespan)
+app = FastAPI(
+    debug=config.DEBUG, root_path=config.ROOT_PATH, lifespan=lifespan
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,3 +40,16 @@ app.add_middleware(
 @app.get("/")
 async def test():
     return {"status": "running"}
+
+
+def main():
+    uvicorn.run(
+        "src.app.main:app",
+        host=config.HOST,
+        port=config.PORT,
+        reload=config.RELOAD,
+    )
+
+
+if __name__ == "__main__":
+    main()

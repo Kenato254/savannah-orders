@@ -12,9 +12,38 @@ dependencies = [
     "sqlalchemy (>=2.0.37,<3.0.0)",
     "uvicorn (>=0.34.0,<0.35.0)",
     "loguru (>=0.7.3,<0.8.0)",
+    "pytest (>=8.3.4,<9.0.0)",
+    "black (>=24.10.0,<25.0.0)",
+    "flake8 (>=7.1.1,<8.0.0)",
 ]
-
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+packages = [{ include = "src" }]
+
+[tool.black]
+line-length = 79
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+
+[tool.flake8]
+max-line-length = 79
+
+[tool.poetry.scripts]
+start = 'src.app.main:main'
