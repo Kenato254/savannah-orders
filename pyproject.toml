@@ -12,9 +12,6 @@ dependencies = [
   "sqlalchemy (>=2.0.37,<3.0.0)",
   "uvicorn (>=0.34.0,<0.35.0)",
   "loguru (>=0.7.3,<0.8.0)",
-  "pytest (>=8.3.4,<9.0.0)",
-  "black (>=24.10.0,<25.0.0)",
-  "flake8 (>=7.1.1,<8.0.0)",
 ]
 
 [build-system]
@@ -26,6 +23,10 @@ packages = [{ include = "src" }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
+black = "^25.1.0"
+flake8 = "^7.1.1"
+mypy = "^1.14.1"
+bandit = "^1.8.2"
 
 [tool.black]
 line-length = 79

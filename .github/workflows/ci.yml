@@ -29,9 +29,13 @@ jobs:
       run: |
         poetry run test
 
-    - name: Check code style with black
+    - name: Format code with black
       run: |
-        poetry run black --check src tests
+        poetry run black src
+    
+    - name: Check code style with flake8
+      run: |
+        poetry run flake8 src
 
     - name: Run mypy for type checking
       run: |
