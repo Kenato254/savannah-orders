@@ -2,7 +2,7 @@
 
 This document provides an overview of the database schema for managing **customers** and **orders**.
 
-![Alt text](/docs/images/db-design.png)
+![Entity Relationships](/docs/images/db-design.png)
 
 ---
 
