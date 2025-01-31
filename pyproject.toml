@@ -1,7 +1,7 @@
 [project]
 name = "savannah-orders"
 version = "0.1.0"
-description = "Savannah Orders is a backend service designed to manage customer and order data efficiently. The system allows users to create and retrieve customer and order records through a REST API built with FastAPI."
+description = "Savannah Orders is a backend service designed to manage customer and order data efficiently. The system allows users to create and retrieve customer and order records through a REST API built with FastAPI for accessment purposes."
 authors = [{ name = "kenato254", email = "kenedygitonga@gmail.com" }]
 license = { text = "MIT" }
 readme = "README.md"

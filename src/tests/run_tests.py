@@ -4,9 +4,7 @@ import sys
 
 def main():
     sys.exit(
-        pytest.main(
-            ["-v", "-s", "--cov=src", "--cov-branch", "--cov-report=xml"]
-        )
+        pytest.main(["-v", "--cov=src", "--cov-branch", "--cov-report=xml"])
     )
 
 
