@@ -43,7 +43,7 @@ jobs:
 
     - name: Run security checks with bandit
       run: |
-        poetry run bandit -r src -c pyproject.toml
+        poetry run bandit -r src/app -c pyproject.toml
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
