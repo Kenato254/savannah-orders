@@ -116,7 +116,7 @@ def test_get_customer_by_id_failure(mock_db):
 
 
 def test_get_customers_success(mock_db, mock_db_user):
-    mock_db.query.return_value.offset.return_value.limit.return_value.all.return_value = [
+    mock_db.query.return_value.offset.return_value.limit.return_value.all.return_value = [  # noqa
         mock_db_user
     ]
     with patch(
@@ -135,7 +135,7 @@ def test_get_customers_success(mock_db, mock_db_user):
 
 
 def test_get_customers_failure(mock_db):
-    mock_db.query.return_value.offset.return_value.limit.return_value.all.side_effect = (
+    mock_db.query.return_value.offset.return_value.limit.return_value.all.side_effect = (  # noqa
         SQLAlchemyError()
     )
     with pytest.raises(HTTPException) as e:
