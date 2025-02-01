@@ -22,7 +22,7 @@ def generate_cust_code(customer_id: str) -> str:
     unique_id = str(uuid.uuid4())[:8]
 
     order_code = (
-        f"{customer_id[:3]}-" f"{today.strftime('%y%m%d')}-{unique_id}"
+        f"CUST{customer_id}-" f"{today.strftime('%y%m%d')}-{unique_id}"
     )
 
     return order_code

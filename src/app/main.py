@@ -4,12 +4,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
+from .api.routes import customers, health
 from .settings.logging import logger
 from .api.db.init import DatabaseService, db_service
 from .settings.config import config
 from .settings.logging import setup_logging
 
 
+# DB Initializer
 @asynccontextmanager
 async def lifespan(app: FastAPI, service: DatabaseService = db_service):
     try:
@@ -24,10 +26,12 @@ async def lifespan(app: FastAPI, service: DatabaseService = db_service):
         logger.info("Application is shutting down...")
 
 
+# App Initializer
 app = FastAPI(
     debug=config.DEBUG, root_path=config.ROOT_PATH, lifespan=lifespan
 )
 
+# Cors
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["localhost", "localhost:3000"],
@@ -37,9 +41,9 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-async def test():
-    return {"status": "running"}
+# Routes
+app.include_router(health.router, prefix="/health", tags=["health"])
+app.include_router(customers.router, prefix="/customers", tags=["customers"])
 
 
 def main():

@@ -8,15 +8,30 @@ from ..utils.error_handler import handle_error_helper
 from ..utils.code_generator import generate_cust_code
 
 
-def create_customer(db: Session, customer: CustomerCreate) -> None:
+def insert_customer(db: Session, customer: CustomerCreate) -> None:
+    """
+    Inserts a new customer into the database.
+
+    Args:
+        db (Session): The database session to use for the operation.
+        customer (CustomerCreate): The customer data to insert.
+
+    Returns:
+        None
+
+    Raises:
+        SQLAlchemyError: If there is an error during the database operation.
+
+    """
     try:
         db_customer = DBCustomer(
             name=customer.name, phone_number=customer.phone_number
         )
+        db.add(db_customer)
+        db.flush()
 
-        code = generate_cust_code(customer.id)  # type: ignore
+        code = generate_cust_code(db_customer.id)  # type: ignore
         db_customer.code = code  # type: ignore
-        db.add(customer)
         db.commit()
         db.refresh(db_customer)
     except SQLAlchemyError as e:
@@ -27,7 +42,7 @@ def create_customer(db: Session, customer: CustomerCreate) -> None:
 
 def get_customer_by_id(  # type: ignore
     db: Session, customer_id: int
-) -> Customer:
+) -> DBCustomer:
     """
     Retrieve a customer by their ID from the database.
 
@@ -44,14 +59,14 @@ def get_customer_by_id(  # type: ignore
                                                                 database.
     """
     try:
-        db_user = (
+        db_customer = (
             db.query(DBCustomer).filter(DBCustomer.id == customer_id).first()
         )
-        if not db_user:
+        if db_customer is None:
             handle_error_helper(
                 404, f"Customer with id: {customer_id} does not exist"
             )
-        return Customer.model_validate(db_user)
+        return db_customer  # type: ignore
     except SQLAlchemyError as e:
         handle_error_helper(
             500,
@@ -62,7 +77,7 @@ def get_customer_by_id(  # type: ignore
         )
 
 
-def get_customers(db: Session, skip: int, limit: int = 10) -> list[Customer]:
+def get_all_customers(db: Session, skip: int, limit: int) -> list[Customer]:
     """
     Retrieve a list of customers from the database with pagination.
 
@@ -89,9 +104,9 @@ def get_customers(db: Session, skip: int, limit: int = 10) -> list[Customer]:
         return []
 
 
-def update_customer(
+def update_customer_by_id(  # type: ignore
     db: Session, customer_id: int, customer_update: CustomerUpdate
-) -> None:
+) -> Customer:
     """
     Update a customer's information in the database.
 
@@ -107,22 +122,23 @@ def update_customer(
         SQLAlchemyError: If there is an error during the update process.
     """
     try:
-        db_user = get_customer_by_id(db, customer_id)
-        update_customer_helper(db_user, customer_update)
+        db_customer = get_customer_by_id(db, customer_id)
+        update_customer_helper(db_customer, customer_update)
         db.commit()
-        db.refresh(db_user)
+        db.refresh(db_customer)
+        return Customer.model_validate(db_customer)
     except SQLAlchemyError as e:
         db.rollback()
         handle_error_helper(
             500,
             (
-                "Error updating user with id:"
+                "Error updating customer with id:"
                 f"{customer_id}. Error {e.with_traceback}"
             ),
         )
 
 
-def delete_customer(db: Session, customer_id: int) -> None:
+def delete_customer_by_id(db: Session, customer_id: int) -> None:
     """
     Deletes a customer from the database.
 
@@ -138,15 +154,15 @@ def delete_customer(db: Session, customer_id: int) -> None:
                          the transaction is rolled back and an error is logged.
     """
     try:
-        db_user = get_customer_by_id(db, customer_id)
-        db.delete(db_user)
+        db_customer = get_customer_by_id(db, customer_id)
+        db.delete(db_customer)
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
         handle_error_helper(
             500,
             (
-                "Error deleting user with id:"
+                "Error deleting customer with id:"
                 f"{customer_id}. Error {e.with_traceback}"
             ),
         )
