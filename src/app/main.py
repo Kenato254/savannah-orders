@@ -1,14 +1,14 @@
-import uvicorn
 from contextlib import asynccontextmanager
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import SQLAlchemyError
 
-from .api.routes import customers, health
-from .settings.logging import logger
 from .api.db.init import DatabaseService, db_service
+from .api.routes import customer, health, order
 from .settings.config import config
-from .settings.logging import setup_logging
+from .settings.logging import logger, setup_logging
 
 
 # DB Initializer
@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI, service: DatabaseService = db_service):
     try:
         logger.info("Application is starting up...")
         setup_logging()
-        service.init_db()
+        await service.init_db()
         yield
     except SQLAlchemyError as e:
         logger.error(f"Database error during startup: {e}")
@@ -43,9 +43,11 @@ app.add_middleware(
 
 # Routes
 app.include_router(health.router, prefix="/health", tags=["health"])
-app.include_router(customers.router, prefix="/customers", tags=["customers"])
+app.include_router(customer.router, prefix="/customers", tags=["customers"])
+app.include_router(order.router, prefix="/orders", tags=["orders"])
 
 
+# Main
 def main():
     uvicorn.run(
         "src.app.main:app",

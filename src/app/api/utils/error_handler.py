@@ -17,20 +17,5 @@ def handle_error_helper(error_code: int, message: str) -> None:
         HTTPException: An exception with the corresponding
                     HTTP status code and error message.
     """
-    logger.error(message)
-    match error_code:
-        case 400:
-            raise HTTPException(status_code=400, detail=message)
-        case 401:
-            raise HTTPException(status_code=401, detail=message)
-        case 403:
-            raise HTTPException(status_code=403, detail=message)
-        case 404:
-            raise HTTPException(status_code=404, detail=message)
-        case 500:
-            raise HTTPException(status_code=500, detail=message)
-        case _:
-            raise HTTPException(
-                status_code=500,
-                detail=f"An unexpected error occurred: {message}",
-            )
+    logger.error(f"Error {error_code}: {message}")
+    raise HTTPException(status_code=error_code, detail=message)

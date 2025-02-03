@@ -1,6 +1,7 @@
 import logging
 import sys
 from pathlib import Path
+
 from loguru import logger
 
 from .config import config
@@ -21,9 +22,9 @@ def configure_loguru(log_file: Path) -> None:
         format=(
             "<green>[{time:YYYY-MM-DD HH:mm:ss}]</green> | "
             "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"  # noqa: E501
+            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"  # noqa
         ),
-        level="DEBUG",
+        level="INFO",
         colorize=True,
         backtrace=True,
         diagnose=True,
@@ -35,6 +36,8 @@ def configure_loguru(log_file: Path) -> None:
         compression="zip",
         format="[{time:YYYY-MM-DD HH:mm:ss}] | {level} | {message}",
         level="INFO",
+        backtrace=True,
+        diagnose=True,
     )
 
 
@@ -46,15 +49,20 @@ class InterceptHandler(logging.Handler):
             level = logger.level(record.levelname).name
         except KeyError:
             level = record.levelno
-        logger.log(level, record.getMessage())
+        logger.opt(exception=record.exc_info).log(level, record.getMessage())
 
 
 def redirect_standard_logs():
     """Redirect standard logging to Loguru."""
     logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO)
+
     for name in logging.root.manager.loggerDict.keys():
-        if name.startswith("uvicorn"):
-            logging.getLogger(name).handlers = [InterceptHandler()]
+        logging.getLogger(name).handlers = [InterceptHandler()]
+
+    # Explicitly configure Uvicorn logs
+    uvicorn_loggers = ["uvicorn", "uvicorn.error", "uvicorn.access"]
+    for name in uvicorn_loggers:
+        logging.getLogger(name).handlers = [InterceptHandler()]
 
 
 def setup_logging():
@@ -65,3 +73,10 @@ def setup_logging():
 
 
 setup_logging()
+
+# Test logging to confirm error stack traces are emitted
+if __name__ == "__main__":
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        logger.exception("Zero division error occurred")

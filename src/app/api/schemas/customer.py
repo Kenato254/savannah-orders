@@ -1,5 +1,8 @@
 from datetime import datetime
+
 from pydantic import BaseModel
+
+from .order import Order
 
 
 class CustomerBase(BaseModel):
@@ -14,7 +17,6 @@ class CustomerCreate(CustomerBase):
 class CustomerUpdate(BaseModel):
     name: str | None = None
     phone_number: str | None = None
-    code: str | None = None
 
 
 class Customer(CustomerBase):
@@ -25,3 +27,7 @@ class Customer(CustomerBase):
 
     class Config:
         from_attributes = True
+
+
+class CustomerOrders(Customer):
+    orders: list[Order] = []

@@ -2,7 +2,7 @@ import datetime
 import uuid
 
 
-def generate_cust_code(customer_id: str) -> str:
+async def generate_code(customer_id: int | None) -> str:
     """
     Generate a unique order code based on the customer ID and the current date.
 

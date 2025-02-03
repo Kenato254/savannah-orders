@@ -28,13 +28,19 @@ flake8 = "^7.1.1"
 mypy = "^1.14.1"
 bandit = "^1.8.2"
 pytest-cov = "^6.0.0"
+pytest-asyncio = "^0.25.3"
+aiosqlite = "^0.20.0"
+isort = "^6.0.0"
 
 [tool.black]
 line-length = 79
 include = '\.pyi?$'
+skip-string-normalization = true
+skip-magic-trailing-comma = true
 exclude = '''
 /(
-    \.git
+    \.eggs
+  | \.git
   | \.hg
   | \.mypy_cache
   | \.tox
@@ -43,8 +49,7 @@ exclude = '''
   | buck-out
   | build
   | dist
-)/
-'''
+)/'''
 
 
 [tool.flake8]
