@@ -1,16 +1,27 @@
+from fastapi import BackgroundTasks
+from pydantic_core import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.api.schemas.customer import Customer
+
+from ...settings.logging import logger
 from ..models.order import Order as DBOrder
 from ..schemas.order import Order, OrderCreate, OrderStatus
+from ..services.sms_service import send_sms_task
 from ..utils.common import update_time
 from ..utils.customer import _get_customer_by_id
 from ..utils.error_handler import handle_error_helper
 from ..utils.order import _get_order_by_id
 
 
-async def insert_order(db: AsyncSession, order: OrderCreate) -> Order:
+async def insert_order(
+    db: AsyncSession,
+    order_create: OrderCreate,
+    background_tasks: BackgroundTasks,
+    sms_service,
+) -> Order:
     """
     Inserts a new order into the database.
 
@@ -25,16 +36,33 @@ async def insert_order(db: AsyncSession, order: OrderCreate) -> Order:
         SQLAlchemyError: If there is an error during the database operation.
     """
     try:
-        customer = await _get_customer_by_id(db, order.customer_id)
+        db_customer = await _get_customer_by_id(db, order_create.customer_id)
+        customer = Customer.model_validate(db_customer)
+
         db_order = DBOrder(
             customer_id=customer.id,
-            item=order.item,
-            amount=order.amount,  # type: ignore
+            item=order_create.item,
+            quantity=order_create.quantity,
+            amount=(
+                order_create.amount * order_create.quantity  # type: ignore
+            ),
         )
         db.add(db_order)
         await db.commit()
         await db.refresh(db_order)
+
+        await send_sms_task(
+            background_tasks, sms_service, order_create, customer
+        )
+
+        logger.info("Order created successfully")
         return Order.model_validate(db_order)
+
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(400, f"Error creating order {e}")
+        raise
+
     except SQLAlchemyError as e:
         handle_error_helper(500, f"Error creating an order {e}")
         raise
@@ -58,14 +86,19 @@ async def get_order_by_id(db: AsyncSession, order_id: int) -> Order:
     """
     try:
         order = await _get_order_by_id(db, order_id)
+
+        logger.info("Order retrieved successfully")
         return Order.model_validate(order)
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(
+            400, f"Error reading order with id: {order_id}. Error {e}"
+        )
+        raise
+
     except SQLAlchemyError as e:
         handle_error_helper(
-            500,
-            (
-                "Error reading order with id:"
-                f" {order_id}. Error {e.with_traceback}"
-            ),
+            500, f"Error reading order with id: {order_id}. Error {e}"
         )
         raise
 
@@ -95,11 +128,16 @@ async def get_all_orders(
         )
         orders = orders_query.scalars().all()
 
+        logger.info("Orders retrieved successfully")
         return [Order.model_validate(order) for order in orders]
+
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(400, f"Error reading orders. Error {e}")
+        raise
+
     except SQLAlchemyError as e:
-        handle_error_helper(
-            500, f"Error reading orders. Error {e.with_traceback}"
-        )
+        handle_error_helper(500, f"Error reading orders. Error {e}")
         raise
 
 
@@ -133,14 +171,21 @@ async def get_orders_by_customer_id(
         )
         orders = orders_query.scalars().all()
 
+        logger.info("Customer orders retrieved successfully")
         return [Order.model_validate(order) for order in orders]
+
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(
+            400,
+            f"Error retrieving orders for customer {customer_id}. Error {e}",
+        )
+        raise
+
     except SQLAlchemyError as e:
         handle_error_helper(
             500,
-            (
-                "Error retrieving orders for customer"
-                f" {customer_id}. Error {e.with_traceback}"
-            ),
+            f"Error retrieving orders for customer {customer_id}. Error {e}",
         )
         return []
 
@@ -168,15 +213,20 @@ async def update_order_by_id(
         await update_time(db_order)
         await db.commit()
         await db.refresh(db_order)
+
+        logger.info("Order updated successfully")
         return Order.model_validate(db_order)
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(
+            400, f"Error updating order with id {order_id}. Error {e}"
+        )
+        raise
+
     except SQLAlchemyError as e:
         await db.rollback()
         handle_error_helper(
-            500,
-            (
-                "Error updating order with id:"
-                f" {order_id}. Error {e.with_traceback}"
-            ),
+            500, ("Error updating order with id:" f" {order_id}. Error {e}")
         )
         raise
 
@@ -200,13 +250,11 @@ async def delete_order_by_id(db: AsyncSession, order_id: int) -> None:
         db_order = await _get_order_by_id(db, order_id)
         await db.delete(db_order)
         await db.commit()
+
+        logger.info("Order deleted successfully")
     except SQLAlchemyError as e:
         await db.rollback()
         handle_error_helper(
-            500,
-            (
-                "Error deleting order with id:"
-                f"{order_id}. Error {e.with_traceback}"
-            ),
+            500, f"Error deleting order with id: {order_id}. Error {e}"
         )
         raise

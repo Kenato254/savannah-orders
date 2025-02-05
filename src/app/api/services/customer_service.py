@@ -1,8 +1,10 @@
+from pydantic_core import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.customers import Customer as DBCustomer
+from ...settings.logging import logger
+from ..models.customer import Customer as DBCustomer
 from ..models.order import Order as DBOrder
 from ..schemas.customer import (
     Customer,
@@ -42,11 +44,11 @@ async def insert_customer(db: AsyncSession, customer: CustomerCreate) -> None:
         db_customer.code = code
         await db.commit()
         await db.refresh(db_customer)
+
+        logger.info("Customer created successfully")
     except SQLAlchemyError as e:
         await db.rollback()
-        handle_error_helper(
-            500, f"Error creating a customer {e.with_traceback}"
-        )
+        handle_error_helper(500, f"Error creating a customer {e}")
         raise
 
 
@@ -68,14 +70,19 @@ async def get_customer_by_id(db: AsyncSession, customer_id: int) -> Customer:
     """
     try:
         db_customer = await _get_customer_by_id(db, customer_id)
+        logger.info("Customer retrieved successfully")
         return Customer.model_validate(db_customer)
+
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(
+            400, f"Error reading customer with id: {customer_id}. Error {e}"
+        )
+        raise
+
     except SQLAlchemyError as e:
         handle_error_helper(
-            500,
-            (
-                "Error reading customer with id:"
-                f"{customer_id}. Error {e.with_traceback}"
-            ),
+            500, f"Error reading customer with id: {customer_id}. Error {e}"
         )
         raise
 
@@ -99,18 +106,21 @@ async def get_all_customers(
         SQLAlchemyError: If there is an error querying the database.
     """
     try:
-        customers = await db.execute(
+        customers_query = await db.execute(
             select(DBCustomer).offset(skip).limit(limit)
         )
-        customer_rows = customers.scalars().all()
+        customers = customers_query.scalars().all()
 
-        return [
-            Customer.model_validate(customer) for customer in customer_rows
-        ]
+        logger.info("Customers retrieved successfully")
+        return [Customer.model_validate(customer) for customer in customers]
+
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(400, f"Error reading customers: {e}")
+        raise
+
     except SQLAlchemyError as e:
-        handle_error_helper(
-            500, f"Error reading customers. Error {e.with_traceback}"
-        )
+        handle_error_helper(500, f"Error reading customers. Error {e}")
         raise
 
 
@@ -133,18 +143,24 @@ async def update_customer_by_id(
     """
     try:
         db_customer = await _get_customer_by_id(db, customer_id)
-        update_customer_helper(db_customer, customer_update)
-        db.commit()
-        db.refresh(db_customer)
+        await update_customer_helper(db_customer, customer_update)
+        await db.commit()
+        await db.refresh(db_customer)
+
+        logger.info("Customer updated successfully")
         return Customer.model_validate(db_customer)
-    except SQLAlchemyError as e:
-        db.rollback()
+
+    except ValidationError as e:
+        await db.rollback()
         handle_error_helper(
-            500,
-            (
-                "Error updating customer with id:"
-                f"{customer_id}. Error {e.with_traceback}"
-            ),
+            400, f"Error updating customer with id: {customer_id}. Error {e}"
+        )
+        raise
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        handle_error_helper(
+            500, f"Error updating customer with id: {customer_id}. Error {e}"
         )
         raise
 
@@ -166,17 +182,17 @@ async def delete_customer_by_id(db: AsyncSession, customer_id: int) -> None:
     """
     try:
         db_customer = await _get_customer_by_id(db, customer_id)
-        db.delete(db_customer)
-        db.commit()
+        await db.delete(db_customer)
+        await db.commit()
+
+        logger.info("Customer deleted successfully")
     except SQLAlchemyError as e:
-        db.rollback()
+        await db.rollback()
         handle_error_helper(
             500,
-            (
-                "Error deleting customer with id:"
-                f"{customer_id}. Error {e.with_traceback}"
-            ),
+            ("Error deleting customer with id:" f"{customer_id}. Error {e}"),
         )
+        raise
 
 
 async def get_customer_order_count(db: AsyncSession, customer_id: int) -> int:
@@ -198,16 +214,18 @@ async def get_customer_order_count(db: AsyncSession, customer_id: int) -> int:
             select(DBOrder).filter(DBOrder.customer_id == customer_id)
         )
         count = len(count_coroutine.scalars().all())
+
+        logger.info("Customer order count retrieved successfully")
         return count
     except SQLAlchemyError as e:
         handle_error_helper(
             500,
             (
                 "Error counting orders for customer"
-                f" {customer_id}. Error {e.with_traceback}"
+                f" {customer_id}. Error {e}"
             ),
         )
-        return 0
+        raise
 
 
 async def get_customer_recent_orders(
@@ -246,12 +264,20 @@ async def get_customer_recent_orders(
 
         return customer
 
+    except ValidationError as e:
+        await db.rollback()
+        handle_error_helper(
+            400,
+            ("Error reading customer with id:" f"{customer_id}. Error {e}"),
+        )
+        raise
+
     except SQLAlchemyError as e:
         handle_error_helper(
             500,
             (
                 "Error reading customer with recent orders for id:"
-                f"{customer_id}. Error {e.with_traceback}"
+                f"{customer_id}. Error {e}"
             ),
         )
         raise

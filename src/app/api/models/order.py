@@ -1,11 +1,11 @@
 from sqlalchemy import Column
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, String
+from sqlalchemy import Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ..models.customers import Customer
 from ..schemas.order import OrderStatus
 from .base_model import BaseModel
+from .customer import Customer
 
 
 class Order(BaseModel):
@@ -13,6 +13,7 @@ class Order(BaseModel):
 
     item = Column(String(length=100), nullable=False)
     amount = Column(Float(precision=2), nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
     status = Column(
         SQLEnum(OrderStatus), default=OrderStatus.ACTIVE, nullable=False
     )

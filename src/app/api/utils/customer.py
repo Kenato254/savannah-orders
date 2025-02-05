@@ -1,12 +1,12 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.customers import Customer
+from ..models.customer import Customer
 from ..schemas.customer import CustomerUpdate
 from .error_handler import handle_error_helper
 
 
-def update_customer_helper(
+async def update_customer_helper(
     db_user: Customer, customer_update: CustomerUpdate
 ) -> None:
     """

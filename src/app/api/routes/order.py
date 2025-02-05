@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.api.db.session import get_db
@@ -12,12 +12,19 @@ from src.app.api.services.order_service import (
     update_order_by_id,
 )
 
+from ...settings.sms.init import get_sms_service
+
 router = APIRouter()
 
 
 @router.post("/", response_model=Order)
-async def create_order(order: OrderCreate, db: AsyncSession = Depends(get_db)):
-    return await insert_order(db, order)
+async def create_order(
+    order: OrderCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    sms_service=Depends(get_sms_service),
+):
+    return await insert_order(db, order, background_tasks, sms_service)
 
 
 @router.get("/{order_id}/", response_model=Order)

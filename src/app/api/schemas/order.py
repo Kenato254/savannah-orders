@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OrderStatus(str, Enum):
@@ -11,9 +11,10 @@ class OrderStatus(str, Enum):
 
 
 class OrderBase(BaseModel):
-    item: str
-    amount: float
-    customer_id: int
+    item: str = Field(..., min_length=1, max_length=100)
+    amount: float = Field(..., gt=0)
+    quantity: int = Field(default=1, gt=0)
+    customer_id: int = Field(..., gt=0)
 
 
 class OrderCreate(OrderBase):

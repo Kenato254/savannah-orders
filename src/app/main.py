@@ -9,15 +9,20 @@ from .api.db.init import DatabaseService, db_service
 from .api.routes import customer, health, order
 from .settings.config import config
 from .settings.logging import logger, setup_logging
+from .settings.sms.init import get_sms_service
 
 
-# DB Initializer
+# Initializer
 @asynccontextmanager
 async def lifespan(app: FastAPI, service: DatabaseService = db_service):
     try:
         logger.info("Application is starting up...")
+        # logs
         setup_logging()
+        # satabase
         await service.init_db()
+        # sms
+        get_sms_service()
         yield
     except SQLAlchemyError as e:
         logger.error(f"Database error during startup: {e}")

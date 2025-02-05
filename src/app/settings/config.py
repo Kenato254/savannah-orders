@@ -1,23 +1,18 @@
 import os
-from configparser import ConfigParser
-from pathlib import Path
 
-from loguru import logger
+from dotenv import load_dotenv
 
 
 class Configuration:
-    """Singleton Configuration class that reads settings from a config file.
+    """Singleton Configuration class that reads settings from .env file or
+                                                        environment variables.
 
     Attributes:
-        DEBUG (bool): Debug mode flag.
-        ROOT_PATH (str): Root path for the application.
-        DATABASE_URL (str): URL for the database connection.
-        SECRET_KEY (str): Secret key for JWT token.
-        EXPIRATION_TIME (int): Expiration time for JWT token.
-        REFRESH_EXPIRATION_TIME (int): Expiration time for JWT refresh token.
+        ...
 
     This class uses the singleton pattern to ensure only one instance
-    of the configuration is ever created.
+    of the configuration is ever created. It prioritizes environment variables
+    over .env file values for settings.
     """
 
     _instance = None
@@ -27,75 +22,49 @@ class Configuration:
             cls._instance = super(Configuration, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, config_file: str = "config.ini"):
-        """Initializes the Configuration class by setting up the configuration
-        parser and reading the config file. This method is only called if the
-        instance does not exist yet.
-
-        Args:
-            config_file (str, optional): Config file name. Defaults to
-                                                            "config.ini".
+    def __init__(self):
+        """Initializes the Configuration class by loading the .env file
+        and setting up configuration attributes from environment variables.
         """
         if not hasattr(self, "initialized"):
-            config = ConfigParser()
-            config_path = (
-                Path(__file__).resolve().parent.parent.parent / config_file
+            load_dotenv()
+
+            # Server
+            self.HOST = os.getenv("HOST", "localhost")
+            self.PORT = int(os.getenv("PORT", "8080"))
+            self.ROOT_PATH = os.getenv("ROOT_PATH", "/api/v1")
+            self.RELOAD = os.getenv("RELOAD", "True").lower() == 'true'
+
+            # Application
+            self.DEBUG = os.getenv("DEBUG", "True").lower() == 'true'
+
+            # Logging
+            self.LOG_LEVEL = os.getenv("LOG_LEVEL", "debug")
+            self.LOG_FILE = os.getenv("LOG_FILE", "app.log")
+
+            # Database
+            self.DATABASE_URL = os.getenv(
+                "DATABASE_URL", "sqlite+aiosqlite:///./test.db"
             )
 
-            try:
-                config.read(config_path)
+            # JWT Token
+            self.ALGORITHM = os.getenv("ALGORITHM", "HS256")
+            self.SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
+            self.EXPIRATION_TIME = int(os.getenv("EXPIRATION_TIME", "60"))
+            self.REFRESH_EXPIRATION_TIME = int(
+                os.getenv("REFRESH_EXPIRATION_TIME", "10080")
+            )
 
-                # Server
-                self.HOST = config.get("SERVER", "HOST")
-                self.PORT = int(config.getint("SERVER", "PORT"))
-                self.ROOT_PATH = config.get("SERVER", "ROOT_PATH")
-                self.RELOAD = config.getboolean("SERVER", "RELOAD")
+            # SMS
+            self.AFRICASTALKING_CODE = os.getenv("AFRICASTALKING_CODE", "")
+            self.AFRICASTALKING_USERNAME = os.getenv(
+                "AFRICASTALKING_USERNAME", ""
+            )
+            self.AFRICASTALKING_API_KEY = os.getenv(
+                "AFRICASTALKING_API_KEY", ""
+            )
 
-                # Application
-                self.DEBUG = config.getboolean("APP", "DEBUG")
-
-                # Logging
-                self.LOG_LEVEL = config.get("LOGGING", "LEVEL")
-                self.LOG_FILE = config.get("LOGGING", "FILE")
-
-                # Database
-                self.DATABASE_URL = config.get("DATABASE", "DATABASE_URL")
-
-                # Jwt Token
-                self.ALGORITHM = config.get("TOKEN", "ALGORITHM")
-                self.SECRET_KEY = config.get("TOKEN", "SECRET_KEY")
-                self.EXPIRATION_TIME = config.getint(
-                    "TOKEN", "EXPIRATION_TIME"
-                )
-                self.REFRESH_EXPIRATION_TIME = config.getint(
-                    "TOKEN", "REFRESH_EXPIRATION_TIME"
-                )
-
-                self.initialized = True
-
-            except Exception as err:
-                logger.error(
-                    f"Reading `{config_file}` failed with error: {err}"
-                )
-
-    def set_env_variables(self):
-        """Sets the configuration attributes as environment variables."""
-        attributes = [
-            "HOST",
-            "PORT",
-            "DEBUG",
-            "ROOT_PATH",
-            "DATABASE_URL",
-            "ALGORITHM",
-            "SECRET_KEY",
-            "EXPIRATION_TIME",
-            "REFRESH_EXPIRATION_TIME",
-        ]
-
-        for attr in attributes:
-            os.environ[attr] = str(getattr(self, attr))
+            self.initialized = True
 
 
-config = Configuration(
-    "resources/development.ini"
-)  # Configuration class instance
+config = Configuration()
