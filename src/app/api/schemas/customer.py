@@ -13,6 +13,7 @@ class CustomerBase(BaseModel):
     phone_number: Annotated[
         str, StringConstraints(min_length=10, max_length=15, pattern=REGEX)
     ] = Field(...)
+    code: int = Field(default=4321, gt=0)
 
 
 class CustomerCreate(CustomerBase):
@@ -29,7 +30,8 @@ class CustomerUpdate(BaseModel):
 
 class Customer(CustomerBase):
     id: int
-    code: str
+    user_id: str
+    code: int
     created_at: datetime
     updated_at: datetime
 

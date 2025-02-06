@@ -292,15 +292,11 @@ async def test_when_delete_order_by_id_is_success(mock_db, mock_db_order):
         "src.app.api.services.order_service._get_order_by_id",
         return_value=mock_db_order,
     ) as mock_get_order:
-        with patch(
-            "src.app.api.services.order_service.handle_error_helper"
-        ) as mock_error_handler:
-            await delete_order_by_id(mock_db, order_id)
+        await delete_order_by_id(mock_db, order_id)
 
-            mock_get_order.assert_awaited_once_with(mock_db, order_id)
-            mock_db.delete.assert_called_once_with(mock_db_order)
-            mock_db.commit.assert_called_once()
-            mock_error_handler.assert_not_called()
+        mock_get_order.assert_awaited_once_with(mock_db, order_id)
+        mock_db.delete.assert_called_once_with(mock_db_order)
+        mock_db.commit.assert_called_once()
 
 
 @pytest.mark.asyncio

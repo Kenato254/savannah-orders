@@ -18,9 +18,7 @@ from src.app.api.services.customer_service import (
     insert_customer,
     update_customer_by_id,
 )
-from src.app.api.utils.code_generator import generate_code
 from src.app.api.utils.customer import _get_customer_by_id
-from src.app.api.utils.error_handler import handle_error_helper
 
 
 @pytest.fixture
@@ -33,8 +31,9 @@ def mock_db_customer():
     mock_customer = MagicMock(spec=DBCustomer)
     mock_customer.id = 1
     mock_customer.name = "John Doe"
-    mock_customer.phone_number = "1234567890"
-    mock_customer.code = "CUST001"
+    mock_customer.user_id = "user-uuid-str"
+    mock_customer.phone_number = "+25412345678"
+    mock_customer.code = 4321
     mock_customer.created_at = datetime.datetime.now(datetime.timezone.utc)
     mock_customer.updated_at = datetime.datetime.now(datetime.timezone.utc)
     return mock_customer
@@ -55,21 +54,17 @@ def mock_db_order():
 
 @pytest.mark.asyncio
 async def test_when_insert_customer_is_success(mock_db, mock_db_customer):
-    customer_data = CustomerCreate(name="John Doe", phone_number="1234567890")
+    customer_data = CustomerCreate(
+        name="John Doe", phone_number="1234567890", code=4321
+    )
 
-    with (
-        patch(
-            "src.app.api.services.customer_service.DBCustomer",
-            return_value=mock_db_customer,
-        ),
-        patch(
-            "src.app.api.services.customer_service.generate_code",
-            return_value="CUST1-250203-abcdefg",
-        ),
+    with patch(
+        "src.app.api.services.customer_service.DBCustomer",
+        return_value=mock_db_customer,
     ):
         mock_db.add.return_value = None
         mock_db.flush.return_value = None
-        await insert_customer(mock_db, customer_data)
+        await insert_customer(mock_db, customer_data, user_id="user-uuid-str")
 
     mock_db.add.assert_called_once()
     mock_db.flush.assert_called_once()
@@ -79,18 +74,14 @@ async def test_when_insert_customer_is_success(mock_db, mock_db_customer):
 
 @pytest.mark.asyncio
 async def test_when_insert_customer_is_failure(mock_db):
-    customer_data = CustomerCreate(name="John Doe", phone_number="1234567890")
+    customer_data = CustomerCreate(
+        name="John Doe", phone_number="1234567890", code=4321
+    )
+
     mock_db.add.side_effect = SQLAlchemyError("Database Error")
 
-    with (
-        pytest.raises(SQLAlchemyError),
-        patch(
-            "src.app.api.services.customer_service.handle_error_helper"
-        ) as mock_handle_error,
-    ):
-        await insert_customer(mock_db, customer_data)
-
-    mock_handle_error.assert_called_once()
+    with (pytest.raises(HTTPException),):
+        await insert_customer(mock_db, customer_data, user_id="user-uuid-str")
 
 
 @pytest.mark.asyncio
@@ -114,14 +105,8 @@ async def test_when_get_customer_by_id_is_not_found(mock_db):
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute = AsyncMock(return_value=mock_result)
 
-    with (
-        pytest.raises(HTTPException),
-        patch(
-            "src.app.api.services.customer_service.handle_error_helper"
-        ) as mock_handle_error,
-    ):
+    with (pytest.raises(HTTPException),):
         await get_customer_by_id(mock_db, 1)
-        mock_handle_error.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -228,15 +213,11 @@ async def test_when_delete_customer_by_id_is_success(
         "src.app.api.services.customer_service._get_customer_by_id",
         return_value=mock_db_customer,
     ) as mock_get_customer:
-        with patch(
-            "src.app.api.utils.error_handler.handle_error_helper"
-        ) as mock_error_handler:
-            await delete_customer_by_id(mock_db, customer_id)
+        await delete_customer_by_id(mock_db, customer_id)
 
-            mock_get_customer.assert_awaited_once_with(mock_db, customer_id)
-            mock_db.delete.assert_called_once_with(mock_db_customer)
-            mock_db.commit.assert_called_once()
-            mock_error_handler.assert_not_called()
+        mock_get_customer.assert_awaited_once_with(mock_db, customer_id)
+        mock_db.delete.assert_called_once_with(mock_db_customer)
+        mock_db.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -248,14 +229,10 @@ async def test_when_delete_customer_by_id_is_failure(
     mock_db.execute.side_effect = SQLAlchemyError("Database error")
 
     with pytest.raises(HTTPException):
-        with patch(
-            "src.app.api.utils.error_handler.handle_error_helper"
-        ) as mock_error_handler:
-            await delete_customer_by_id(mock_db, customer_id)
+        await delete_customer_by_id(mock_db, customer_id)
 
-            mock_db.delete.assert_called_once_with(mock_db_customer)
-            mock_db.commit.assert_called_once()
-            mock_error_handler.assert_called_once()
+        mock_db.delete.assert_called_once_with(mock_db_customer)
+        mock_db.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -268,24 +245,12 @@ async def test_when_delete_customer_by_id_is_not_found(mock_db):
     mock_db.execute = AsyncMock(return_value=mock_result)
 
     with pytest.raises(HTTPException):
-        with patch(
-            "src.app.api.utils.error_handler.handle_error_helper"
-        ) as mock_error_handler:
-            await delete_customer_by_id(mock_db, customer_id)
+        await delete_customer_by_id(mock_db, customer_id)
 
-            mock_db.delete.assert_not_called()
-            mock_db.commit.assert_not_called()
-            mock_error_handler.assert_called_once()
+        mock_db.delete.assert_not_called()
+        mock_db.commit.assert_not_called()
     mock_db.execute.assert_called_once()
     mock_result.scalar_one_or_none.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_when_generate_code():
-    customer_id = "1"
-    code = await generate_code(customer_id)
-    assert code.startswith("CUST")
-    assert len(code) == 21
 
 
 @pytest.mark.asyncio
@@ -317,21 +282,8 @@ async def test_get_customer_order_count_is_failure(mock_db):
     mock_db.execute.side_effect = SQLAlchemyError("Database error")
 
     with pytest.raises(HTTPException):
-        with patch(
-            "src.app.api.utils.error_handler.handle_error_helper"
-        ) as mock_error_handler:
-
-            await get_customer_order_count(mock_db, customer_id)
-            mock_error_handler.assert_called_once()
+        await get_customer_order_count(mock_db, customer_id)
 
     mock_db.execute.assert_called_once()
     mock_db.execute.return_value.scalars.assert_not_called()
     mock_db.execute.return_value.scalars.return_value.all.assert_not_called()
-
-
-def test_handle_error_helper():
-    with patch("src.app.settings.logging.logger.error") as mock_logger:
-        with pytest.raises(HTTPException) as e:
-            handle_error_helper(404, "Not Found")
-        assert e.value.status_code == 404
-        mock_logger.assert_called_once_with("Error 404: Not Found")

@@ -15,6 +15,7 @@ This document provides an overview of the database schema for managing **custome
 |-------------------|----------------|----------------------------------------------|--------------------------------------------|
 | `customer_id`     | `int`          | `NOT NULL`, `PRIMARY KEY`                    | Unique identifier for each customer.       |
 | `customer_name`   | `varchar(100)` | `NOT NULL`                                   | Name of the customer.                      |
+| `user_id`         | `int`          | `NOT NULL`,                                  | Unique User identifier for each customer . |
 | `code`            | `varchar(50)`  | `UNIQUE`                                     | Unique customer code.                      |
 | `phone_number`    | `varchar(15)`  | `NOT NULL`                                   | Customer's phone number.                   |
 | `created_at`      | `datetime`     | `NOT NULL`, `DEFAULT CURRENT_TIMESTAMP`      | Timestamp when the customer was created    |

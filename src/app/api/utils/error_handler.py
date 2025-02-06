@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from pydantic_core import ValidationError
 
 from ...settings.logging import logger
 
@@ -19,3 +20,10 @@ def handle_error_helper(error_code: int, message: str) -> None:
     """
     logger.error(f"Error {error_code}: {message}")
     raise HTTPException(status_code=error_code, detail=message)
+
+
+def format_validation_error_msg(e: ValidationError) -> str:
+    msg = ""
+    for error in e.errors():
+        msg = f"{error["msg"]}: {error["type"]} `{error["loc"][0]}`"
+    return msg

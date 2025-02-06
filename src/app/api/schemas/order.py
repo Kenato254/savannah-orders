@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class OrderStatus(str, Enum):
+    PENDING = "Pending"
     ACTIVE = "Active"
     CANCELLED = "Cancelled"
     DELIVERED = "Delivered"

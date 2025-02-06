@@ -1,6 +1,12 @@
+from fastapi import HTTPException, status
 from pydantic_core import ValidationError
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import (
+    IntegrityError,
+    MultipleResultsFound,
+    NoResultFound,
+    SQLAlchemyError,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...settings.logging import logger
@@ -13,43 +19,65 @@ from ..schemas.customer import (
     CustomerUpdate,
 )
 from ..schemas.order import Order
-from ..utils.code_generator import generate_code
 from ..utils.customer import _get_customer_by_id, update_customer_helper
-from ..utils.error_handler import handle_error_helper
+from ..utils.error_handler import format_validation_error_msg
 
 
-async def insert_customer(db: AsyncSession, customer: CustomerCreate) -> None:
+async def insert_customer(
+    db: AsyncSession, customer: CustomerCreate, user_id: str
+) -> Customer:
     """
     Inserts a new customer into the database.
 
     Args:
-        db (Session): The database session to use for the operation.
+        db (AsyncSession): The database session to use for the operation.
         customer (CustomerCreate): The customer data to insert.
+        user_id (str): The user ID associated with the customer.
 
     Returns:
-        None
+        Customer: The created customer.
 
     Raises:
-        SQLAlchemyError: If there is an error during the database operation.
-
+        HTTPException: If there is an error during the database operation.
     """
     try:
         db_customer = DBCustomer(
-            name=customer.name, phone_number=customer.phone_number
+            name=customer.name,
+            phone_number=customer.phone_number,
+            code=customer.code,
+            user_id=user_id,
         )
         db.add(db_customer)
         await db.flush()
 
-        code = await generate_code(int(db_customer.id))  # type: ignore
-        db_customer.code = code
         await db.commit()
         await db.refresh(db_customer)
 
         logger.info("Customer created successfully")
+        return Customer.model_validate(db_customer)
+
+    except ValidationError as e:
+        await db.rollback()
+        logger.error(f"Validation error: {e}")
+        raise HTTPException(status_code=400, detail=f"Validation error: {e}")
+
+    except IntegrityError as e:
+        await db.rollback()
+        logger.error(f"Integrity error: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail="Customer with the same user_id already exists.",
+        )
+
     except SQLAlchemyError as e:
         await db.rollback()
-        handle_error_helper(500, f"Error creating a customer {e}")
-        raise
+        logger.error(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def get_customer_by_id(db: AsyncSession, customer_id: int) -> Customer:
@@ -57,7 +85,7 @@ async def get_customer_by_id(db: AsyncSession, customer_id: int) -> Customer:
     Retrieve a customer by their ID from the database.
 
     Args:
-        db (Session): The database session to use for the query.
+        db (AsyncSession): The database session to use for the query.
         customer_id (int): The ID of the customer to retrieve.
 
     Returns:
@@ -65,26 +93,63 @@ async def get_customer_by_id(db: AsyncSession, customer_id: int) -> Customer:
 
     Raises:
         HTTPException: If the customer with the given ID does not exist.
-        HTTPException: If there is an error reading the customer from the
-                                                                database.
+        HTTPException: If there is an error reading the customer from
+                                                            the database.
     """
     try:
         db_customer = await _get_customer_by_id(db, customer_id)
-        logger.info("Customer retrieved successfully")
+        logger.info(f"Customer with ID {customer_id} retrieved successfully")
         return Customer.model_validate(db_customer)
 
-    except ValidationError as e:
-        await db.rollback()
-        handle_error_helper(
-            400, f"Error reading customer with id: {customer_id}. Error {e}"
+    except NoResultFound:
+        logger.error(f"Customer with ID {customer_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer with ID {customer_id} not found",
         )
-        raise
+
+    except MultipleResultsFound:
+        logger.error(f"Multiple customers found with ID {customer_id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Multiple customers found with ID {customer_id}",
+        )
+
+    except ValidationError as e:
+        logger.error(
+            f"Validation error for customer with ID {customer_id}: {e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Validation error for customer with ID "
+                f"{customer_id}: {format_validation_error_msg(e)}"
+            ),
+        )
 
     except SQLAlchemyError as e:
-        handle_error_helper(
-            500, f"Error reading customer with id: {customer_id}. Error {e}"
+        logger.error(
+            (
+                "Database error while retrieving customer with ID "
+                f"{customer_id}: {e}"
+            )
         )
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reading customer with ID {customer_id}",
+        )
+
+    except Exception as e:
+        logger.error(
+            (
+                "Unexpected error while retrieving customer with ID "
+                f"{customer_id}: {e}"
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        )
 
 
 async def get_all_customers(
@@ -94,16 +159,16 @@ async def get_all_customers(
     Retrieve a list of customers from the database with pagination.
 
     Args:
-        db (Session): The database session to use for the query.
-        skip (int): The number of records to skip before starting to collect
-                                                                the result set.
-        limit (int): The maximum number of records to return. Defaults to 10.
+        db (AsyncSession): The database session to use for the query.
+        skip (int): The number of records to skip before starting to
+                                                    collect the result set.
+        limit (int): The maximum number of records to return.
 
     Returns:
         list[Customer]: A list of Customer objects.
 
     Raises:
-        SQLAlchemyError: If there is an error querying the database.
+        HTTPException: If there is an error querying the database.
     """
     try:
         customers_query = await db.execute(
@@ -111,17 +176,29 @@ async def get_all_customers(
         )
         customers = customers_query.scalars().all()
 
-        logger.info("Customers retrieved successfully")
+        logger.info(f"Retrieved {len(customers)} customers successfully")
         return [Customer.model_validate(customer) for customer in customers]
 
     except ValidationError as e:
-        await db.rollback()
-        handle_error_helper(400, f"Error reading customers: {e}")
-        raise
+        logger.error(f"Validation error while retrieving customers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Validation error: {format_validation_error_msg(e)}",
+        )
 
     except SQLAlchemyError as e:
-        handle_error_helper(500, f"Error reading customers. Error {e}")
-        raise
+        logger.error(f"Database error while retrieving customers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while retrieving customers",
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error while retrieving customers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        )
 
 
 async def update_customer_by_id(
@@ -131,15 +208,16 @@ async def update_customer_by_id(
     Update a customer's information in the database.
 
     Args:
-        db (Session): The database session to use for the update.
+        db (AsyncSession): The database session to use for the update.
         customer_id (int): The ID of the customer to update.
         customer_update (CustomerUpdate): The updated customer information.
 
     Returns:
-        None
+        Customer: The updated customer object.
 
     Raises:
-        SQLAlchemyError: If there is an error during the update process.
+        HTTPException: If the customer is not found or there is an error
+                                                            during the update.
     """
     try:
         db_customer = await _get_customer_by_id(db, customer_id)
@@ -147,22 +225,51 @@ async def update_customer_by_id(
         await db.commit()
         await db.refresh(db_customer)
 
-        logger.info("Customer updated successfully")
+        logger.info(f"Customer with ID {customer_id} updated successfully")
         return Customer.model_validate(db_customer)
+
+    except NoResultFound:
+        logger.error(f"Customer with ID {customer_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer with ID {customer_id} not found",
+        )
 
     except ValidationError as e:
         await db.rollback()
-        handle_error_helper(
-            400, f"Error updating customer with id: {customer_id}. Error {e}"
+        logger.error(
+            f"Validation error for customer with ID {customer_id}: {e}"
         )
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Validation error: {format_validation_error_msg(e)}",
+        )
 
     except SQLAlchemyError as e:
         await db.rollback()
-        handle_error_helper(
-            500, f"Error updating customer with id: {customer_id}. Error {e}"
+        logger.error(
+            (
+                "Database error while updating customer with ID "
+                f"{customer_id}: {e}"
+            )
         )
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while updating the customer",
+        )
+
+    except Exception as e:
+        await db.rollback()
+        logger.error(
+            (
+                "Unexpected error while updating customer with ID "
+                f"{customer_id}: {e}"
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        )
 
 
 async def delete_customer_by_id(db: AsyncSession, customer_id: int) -> None:
@@ -170,29 +277,52 @@ async def delete_customer_by_id(db: AsyncSession, customer_id: int) -> None:
     Deletes a customer from the database.
 
     Args:
-        db (Session): The database session to use for the operation.
+        db (AsyncSession): The database session to use for the operation.
         customer_id (int): The ID of the customer to delete.
 
-    Returns:
-        None
-
     Raises:
-        SQLAlchemyError: If there is an error during the deletion process,
-                         the transaction is rolled back and an error is logged.
+        HTTPException: If the customer is not found or there is an error
+                                                            during deletion.
     """
     try:
         db_customer = await _get_customer_by_id(db, customer_id)
         await db.delete(db_customer)
         await db.commit()
 
-        logger.info("Customer deleted successfully")
+        logger.info(f"Customer with ID {customer_id} deleted successfully")
+
+    except NoResultFound:
+        logger.error(f"Customer with ID {customer_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer with ID {customer_id} not found",
+        )
+
     except SQLAlchemyError as e:
         await db.rollback()
-        handle_error_helper(
-            500,
-            ("Error deleting customer with id:" f"{customer_id}. Error {e}"),
+        logger.error(
+            (
+                "Database error while deleting customer with ID "
+                f"{customer_id}: {e}"
+            )
         )
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while deleting the customer",
+        )
+
+    except Exception as e:
+        await db.rollback()
+        logger.error(
+            (
+                "Unexpected error while deleting customer with ID "
+                f"{customer_id}: {e}"
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        )
 
 
 async def get_customer_order_count(db: AsyncSession, customer_id: int) -> int:
@@ -200,14 +330,15 @@ async def get_customer_order_count(db: AsyncSession, customer_id: int) -> int:
     Count the number of orders for a specific customer.
 
     Args:
-        db (Session): The database session to use for the query.
+        db (AsyncSession): The database session to use for the query.
         customer_id (int): The ID of the customer whose order count is needed.
 
     Returns:
         int: The number of orders for the specified customer.
 
     Raises:
-        HTTPException: If there is an error querying the database.
+        HTTPException: If the customer is not found or there is an error
+                                                        querying the database.
     """
     try:
         count_coroutine = await db.execute(
@@ -215,33 +346,59 @@ async def get_customer_order_count(db: AsyncSession, customer_id: int) -> int:
         )
         count = len(count_coroutine.scalars().all())
 
-        logger.info("Customer order count retrieved successfully")
-        return count
-    except SQLAlchemyError as e:
-        handle_error_helper(
-            500,
+        logger.info(
             (
-                "Error counting orders for customer"
-                f" {customer_id}. Error {e}"
-            ),
+                f"Order count for customer with ID {customer_id}"
+                "retrieved successfully"
+            )
         )
-        raise
+        return count
+
+    except NoResultFound:
+        logger.error(f"Customer with ID {customer_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer with ID {customer_id} not found",
+        )
+
+    except SQLAlchemyError as e:
+        logger.error(
+            (
+                "Database error while counting orders for customer with ID"
+                f"{customer_id}: {e}"
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while counting orders",
+        )
+
+    except Exception as e:
+        logger.error(
+            (
+                "Unexpected error while counting orders for customer with ID "
+                f"{customer_id}: {e}"
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        )
 
 
 async def get_customer_recent_orders(
     db: AsyncSession, customer_id: int, limit: int
 ) -> CustomerOrders:
     """
-    Retrieve a customer most recent orders.
+    Retrieve a customer's most recent orders.
 
     Args:
-        db (Session): The database session to use for the query.
+        db (AsyncSession): The database session to use for the query.
         customer_id (int): The ID of the customer to fetch.
-        limit (int, optional): Number of recent orders to retrieve.
-                                                        Defaults to 5.
+        limit (int): Number of recent orders to retrieve.
 
     Returns:
-        Customer: Customer object including their recent orders.
+        CustomerOrders: Customer object including their recent orders.
 
     Raises:
         HTTPException: If the customer or orders cannot be retrieved.
@@ -262,22 +419,50 @@ async def get_customer_recent_orders(
             Order.model_validate(order) for order in customer_orders
         ]
 
+        logger.info(
+            (
+                f"Retrieved {len(customer_orders)} "
+                f"recent orders for customer with ID {customer_id}"
+            )
+        )
         return customer
 
-    except ValidationError as e:
-        await db.rollback()
-        handle_error_helper(
-            400,
-            ("Error reading customer with id:" f"{customer_id}. Error {e}"),
+    except NoResultFound:
+        logger.error(f"Customer with ID {customer_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer with ID {customer_id} not found",
         )
-        raise
+
+    except ValidationError as e:
+        logger.error(
+            f"Validation error for customer with ID {customer_id}: {e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Validation error: {format_validation_error_msg(e)}",
+        )
 
     except SQLAlchemyError as e:
-        handle_error_helper(
-            500,
+        logger.error(
             (
-                "Error reading customer with recent orders for id:"
-                f"{customer_id}. Error {e}"
-            ),
+                "Database error while retrieving recent orders "
+                f"for customer with ID {customer_id}: {e}"
+            )
         )
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while retrieving recent orders",
+        )
+
+    except Exception as e:
+        logger.error(
+            (
+                "Unexpected error while retrieving recent orders "
+                f"for customer with ID {customer_id}: {e}"
+            )
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred",
+        )

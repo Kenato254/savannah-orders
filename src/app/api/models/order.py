@@ -15,7 +15,7 @@ class Order(BaseModel):
     amount = Column(Float(precision=2), nullable=False)
     quantity = Column(Integer, nullable=False, default=1)
     status = Column(
-        SQLEnum(OrderStatus), default=OrderStatus.ACTIVE, nullable=False
+        SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False
     )
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"))
     customer: Mapped[Customer] = relationship("Customer")
